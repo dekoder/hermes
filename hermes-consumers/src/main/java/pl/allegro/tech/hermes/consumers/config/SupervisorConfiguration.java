@@ -35,8 +35,9 @@ import pl.allegro.tech.hermes.consumers.supervisor.process.Retransmitter;
 import pl.allegro.tech.hermes.consumers.supervisor.workload.ClusterAssignmentCache;
 import pl.allegro.tech.hermes.consumers.supervisor.workload.ConsumerAssignmentCache;
 import pl.allegro.tech.hermes.consumers.supervisor.workload.ConsumerAssignmentRegistry;
-import pl.allegro.tech.hermes.consumers.supervisor.workload.SupervisorController;
-import pl.allegro.tech.hermes.consumers.supervisor.workload.selective.SelectiveSupervisorController;
+import pl.allegro.tech.hermes.consumers.supervisor.workload.SelectiveWorkBalancer;
+import pl.allegro.tech.hermes.consumers.supervisor.workload.WorkBalancer;
+import pl.allegro.tech.hermes.consumers.supervisor.workload.WorkloadSupervisor;
 import pl.allegro.tech.hermes.domain.notifications.InternalNotificationsBus;
 import pl.allegro.tech.hermes.domain.subscription.SubscriptionRepository;
 import pl.allegro.tech.hermes.domain.topic.TopicRepository;
@@ -57,22 +58,23 @@ public class SupervisorConfiguration {
     private static final Logger logger = getLogger(SupervisorConfiguration.class);
 
     @Bean(initMethod = "start", destroyMethod = "shutdown")
-    public SupervisorController supervisorController(InternalNotificationsBus notificationsBus,
-                                                     ConsumerNodesRegistry consumerNodesRegistry,
-                                                     ConsumerAssignmentRegistry assignmentRegistry,
-                                                     ConsumerAssignmentCache consumerAssignmentCache,
-                                                     ClusterAssignmentCache clusterAssignmentCache,
-                                                     SubscriptionsCache subscriptionsCache,
-                                                     ConsumersSupervisor supervisor,
-                                                     ZookeeperAdminCache adminCache,
-                                                     HermesMetrics metrics,
-                                                     ConfigFactory configs,
-                                                     WorkloadConstraintsRepository workloadConstraintsRepository) {
+    public WorkloadSupervisor workloadSupervisor(InternalNotificationsBus notificationsBus,
+                                                 ConsumerNodesRegistry consumerNodesRegistry,
+                                                 ConsumerAssignmentRegistry assignmentRegistry,
+                                                 ConsumerAssignmentCache consumerAssignmentCache,
+                                                 ClusterAssignmentCache clusterAssignmentCache,
+                                                 SubscriptionsCache subscriptionsCache,
+                                                 ConsumersSupervisor supervisor,
+                                                 ZookeeperAdminCache adminCache,
+                                                 HermesMetrics metrics,
+                                                 ConfigFactory configs,
+                                                 WorkloadConstraintsRepository workloadConstraintsRepository,
+                                                 WorkBalancer workBalancer) {
         ThreadFactory threadFactory = new ThreadFactoryBuilder()
                 .setNameFormat("AssignmentExecutor-%d")
                 .setUncaughtExceptionHandler((t, e) -> logger.error("AssignmentExecutor failed {}", t.getName(), e)).build();
         ExecutorService assignmentExecutor = newFixedThreadPool(configs.getIntProperty(CONSUMER_WORKLOAD_ASSIGNMENT_PROCESSING_THREAD_POOL_SIZE), threadFactory);
-        return new SelectiveSupervisorController(
+        return new WorkloadSupervisor(
                 supervisor,
                 notificationsBus,
                 subscriptionsCache,
@@ -84,8 +86,14 @@ public class SupervisorConfiguration {
                 assignmentExecutor,
                 configs,
                 metrics,
-                workloadConstraintsRepository
+                workloadConstraintsRepository,
+                workBalancer
         );
+    }
+
+    @Bean
+    public WorkBalancer workBalancer() {
+        return new SelectiveWorkBalancer();
     }
 
     @Bean
@@ -154,7 +162,7 @@ public class SupervisorConfiguration {
 
     @Bean(initMethod = "start", destroyMethod = "shutdown")
     public ConsumersRuntimeMonitor consumersRuntimeMonitor(ConsumersSupervisor consumerSupervisor,
-                                                           SupervisorController workloadSupervisor,
+                                                           WorkloadSupervisor workloadSupervisor,
                                                            HermesMetrics hermesMetrics,
                                                            SubscriptionsCache subscriptionsCache,
                                                            ConfigFactory configFactory) {

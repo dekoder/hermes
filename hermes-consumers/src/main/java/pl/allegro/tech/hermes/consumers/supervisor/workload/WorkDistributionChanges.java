@@ -2,7 +2,7 @@ package pl.allegro.tech.hermes.consumers.supervisor.workload;
 
 import static java.lang.String.format;
 
-public class WorkDistributionChanges {
+class WorkDistributionChanges {
 
     static final WorkDistributionChanges NO_CHANGES = new WorkDistributionChanges(0, 0);
 
@@ -14,16 +14,16 @@ public class WorkDistributionChanges {
         this.assignmentsCreated = assignmentsCreated;
     }
 
-    public int getDeletedAssignmentsCount() {
+    int getDeletedAssignmentsCount() {
         return assignmentsDeleted;
     }
 
-    public int getCreatedAssignmentsCount() {
+    int getCreatedAssignmentsCount() {
         return assignmentsCreated;
     }
 
+    @Override
     public String toString() {
-        return format("assignments_created=%d, assignments_deleted=%d",
-                assignmentsCreated, assignmentsDeleted);
+        return format("assignments_created=%d, assignments_deleted=%d", assignmentsCreated, assignmentsDeleted);
     }
 }
