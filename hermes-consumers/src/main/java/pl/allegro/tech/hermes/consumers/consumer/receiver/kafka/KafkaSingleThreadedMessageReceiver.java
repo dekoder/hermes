@@ -87,11 +87,11 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
     @Override
     public Optional<Message> next() {
         try {
+            Set<TopicPartition> partitions = partitionAssignmentState.getPartitions(subscription.getQualifiedName());
+            Map<TopicPartition, Long> topicPartitionLongMap = consumer.endOffsets(partitions);
+            resourcesGuard.record(subscription, topicPartitionLongMap);
             if (readQueue.isEmpty()) {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(pollTimeout));
-                Set<TopicPartition> partitions = partitionAssignmentState.getPartitions(subscription.getQualifiedName());
-                Map<TopicPartition, Long> topicPartitionLongMap = consumer.endOffsets(partitions);
-                resourcesGuard.record(subscription, topicPartitionLongMap);
                 try {
                     for (ConsumerRecord<byte[], byte[]> record : records) {
                         Message message = convertToMessage(record);
