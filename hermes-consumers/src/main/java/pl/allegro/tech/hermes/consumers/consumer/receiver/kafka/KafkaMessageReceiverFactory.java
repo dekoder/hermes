@@ -1,5 +1,6 @@
 package pl.allegro.tech.hermes.consumers.consumer.receiver.kafka;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import pl.allegro.tech.hermes.api.Subscription;
 import pl.allegro.tech.hermes.api.Topic;
@@ -67,6 +68,7 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
     private final Trackers trackers;
     private final ConsumerPartitionAssignmentState consumerPartitionAssignmentState;
     private final ResourcesGuard resourcesGuard;
+    private final AdminClient adminClient;
 
     public KafkaMessageReceiverFactory(ConfigFactory configs,
                                        KafkaConsumerRecordToMessageConverterFactory messageConverterFactory,
@@ -76,7 +78,8 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
                                        FilterChainFactory filterChainFactory,
                                        Trackers trackers,
                                        ConsumerPartitionAssignmentState consumerPartitionAssignmentState,
-                                       ResourcesGuard resourcesGuard) {
+                                       ResourcesGuard resourcesGuard,
+                                       AdminClient adminClient) {
         this.configs = configs;
         this.messageConverterFactory = messageConverterFactory;
         this.hermesMetrics = hermesMetrics;
@@ -86,6 +89,7 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
         this.trackers = trackers;
         this.consumerPartitionAssignmentState = consumerPartitionAssignmentState;
         this.resourcesGuard = resourcesGuard;
+        this.adminClient = adminClient;
     }
 
     @Override
@@ -93,8 +97,11 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
                                                  Subscription subscription,
                                                  ConsumerRateLimiter consumerRateLimiter) {
 
+        ConsumerGroupId groupId = kafkaNamesMapper.toConsumerGroupId(subscription.getQualifiedName());
         MessageReceiver receiver = new KafkaSingleThreadedMessageReceiver(
-                createKafkaConsumer(topic, subscription),
+                adminClient,
+                createKafkaConsumer(topic, groupId),
+                groupId,
                 messageConverterFactory,
                 hermesMetrics,
                 kafkaNamesMapper,
@@ -127,8 +134,7 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
         return receiver;
     }
 
-    private KafkaConsumer<byte[], byte[]> createKafkaConsumer(Topic topic, Subscription subscription) {
-        ConsumerGroupId groupId = kafkaNamesMapper.toConsumerGroupId(subscription.getQualifiedName());
+    private KafkaConsumer<byte[], byte[]> createKafkaConsumer(Topic topic, ConsumerGroupId groupId) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, configs.getStringProperty(Configs.KAFKA_BROKER_LIST));
         props.put(CLIENT_ID_CONFIG, configs.getStringProperty(Configs.CONSUMER_CLIENT_ID) + "_" + groupId.asString());

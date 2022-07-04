@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.allegro.tech.hermes.api.Subscription;
 import pl.allegro.tech.hermes.api.Topic;
+import pl.allegro.tech.hermes.common.kafka.ConsumerGroupId;
 import pl.allegro.tech.hermes.common.kafka.KafkaNamesMapper;
 import pl.allegro.tech.hermes.common.kafka.KafkaTopic;
 import pl.allegro.tech.hermes.common.kafka.KafkaTopics;
@@ -48,7 +49,7 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
     private final ResourcesGuard resourcesGuard;
     private final KafkaConsumerOffsetMover offsetMover;
 
-    private final String groupId;
+    private final ConsumerGroupId groupId;
     private final HermesMetrics metrics;
     private volatile Subscription subscription;
 
@@ -57,7 +58,7 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
 
     public KafkaSingleThreadedMessageReceiver(AdminClient adminClient,
                                               KafkaConsumer<byte[], byte[]> consumer,
-                                              String groupId,
+                                              ConsumerGroupId groupId,
                                               KafkaConsumerRecordToMessageConverterFactory messageConverterFactory,
                                               HermesMetrics metrics,
                                               KafkaNamesMapper kafkaNamesMapper,
@@ -97,7 +98,7 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
             try {
                 Set<TopicPartition> partitions = partitionAssignmentState.getPartitions(subscription.getQualifiedName());
                 Map<TopicPartition, Long> committedOffsets = adminClient
-                        .listConsumerGroupOffsets(groupId)
+                        .listConsumerGroupOffsets(groupId.asString())
                         .partitionsToOffsetAndMetadata()
                         .get()
                         .entrySet()
