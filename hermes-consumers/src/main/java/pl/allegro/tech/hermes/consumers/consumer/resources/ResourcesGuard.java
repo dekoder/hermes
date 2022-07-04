@@ -22,7 +22,7 @@ public interface ResourcesGuard {
 
     void updateSubscription(Subscription newSubscription);
 
-    void record(Subscription subscription, Map<TopicPartition, Long> topicPartitionLongMap);
+    void record(Subscription subscription, Map<TopicPartition, Long> committedOffsets, Map<TopicPartition, Long> endOffsets);
 
     void record(Message message);
 }

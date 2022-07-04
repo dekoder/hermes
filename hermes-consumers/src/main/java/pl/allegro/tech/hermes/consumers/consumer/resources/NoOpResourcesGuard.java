@@ -43,7 +43,7 @@ public class NoOpResourcesGuard implements ResourcesGuard {
     }
 
     @Override
-    public void record(Subscription subscription, Map<TopicPartition, Long> topicPartitionLongMap) {
+    public void record(Subscription subscription, Map<TopicPartition, Long> committedOffsets, Map<TopicPartition, Long> endOffsets) {
 
     }
 

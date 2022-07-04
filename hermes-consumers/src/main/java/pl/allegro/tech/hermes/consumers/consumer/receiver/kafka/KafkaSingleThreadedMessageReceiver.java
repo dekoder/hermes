@@ -1,6 +1,7 @@
 package pl.allegro.tech.hermes.consumers.consumer.receiver.kafka;
 
 import com.google.common.collect.ImmutableList;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -39,6 +40,7 @@ import java.util.stream.Collectors;
 public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
     private static final Logger logger = LoggerFactory.getLogger(KafkaSingleThreadedMessageReceiver.class);
 
+    private final AdminClient adminClient;
     private final KafkaConsumer<byte[], byte[]> consumer;
     private final KafkaConsumerRecordToMessageConverter messageConverter;
 
@@ -46,13 +48,16 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
     private final ResourcesGuard resourcesGuard;
     private final KafkaConsumerOffsetMover offsetMover;
 
+    private final String groupId;
     private final HermesMetrics metrics;
     private volatile Subscription subscription;
 
     private final int pollTimeout;
     private final ConsumerPartitionAssignmentState partitionAssignmentState;
 
-    public KafkaSingleThreadedMessageReceiver(KafkaConsumer<byte[], byte[]> consumer,
+    public KafkaSingleThreadedMessageReceiver(AdminClient adminClient,
+                                              KafkaConsumer<byte[], byte[]> consumer,
+                                              String groupId,
                                               KafkaConsumerRecordToMessageConverterFactory messageConverterFactory,
                                               HermesMetrics metrics,
                                               KafkaNamesMapper kafkaNamesMapper,
@@ -62,6 +67,8 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
                                               int readQueueCapacity,
                                               ConsumerPartitionAssignmentState partitionAssignmentState,
                                               ResourcesGuard resourcesGuard) {
+        this.groupId = groupId;
+        this.adminClient = adminClient;
         this.metrics = metrics;
         this.subscription = subscription;
         this.pollTimeout = pollTimeout;
@@ -87,9 +94,20 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
     @Override
     public Optional<Message> next() {
         try {
-            Set<TopicPartition> partitions = partitionAssignmentState.getPartitions(subscription.getQualifiedName());
-            Map<TopicPartition, Long> topicPartitionLongMap = consumer.endOffsets(partitions);
-            resourcesGuard.record(subscription, topicPartitionLongMap);
+            try {
+                Set<TopicPartition> partitions = partitionAssignmentState.getPartitions(subscription.getQualifiedName());
+                Map<TopicPartition, Long> committedOffsets = adminClient
+                        .listConsumerGroupOffsets(groupId)
+                        .partitionsToOffsetAndMetadata()
+                        .get()
+                        .entrySet()
+                        .stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+                Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+                resourcesGuard.record(subscription, committedOffsets, endOffsets);
+            } catch (Exception e) {
+                logger.error("Failed to report offsets", e);
+            }
             if (readQueue.isEmpty()) {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(pollTimeout));
                 try {
@@ -99,11 +117,7 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
                         resourcesGuard.record(message);
                     }
                 } catch (Exception ex) {
-                    logger.error("Failed to read message for subscription {}, readQueueSize {}, records {}",
-                            subscription.getQualifiedName(),
-                            readQueue.size(),
-                            records.count(),
-                            ex);
+                    logger.error("Failed to read message for subscription " + subscription.getQualifiedName() + ", readQueueSize " + readQueue.size() + ", records " + records.count(), ex);
                 }
             }
             return Optional.ofNullable(readQueue.poll());
@@ -117,10 +131,7 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
             logger.error("Error while reading message for subscription {}", subscription.getQualifiedName(), ex);
             return Optional.empty();
         } catch (Exception ex) {
-            logger.error("Failed to read message for subscription {}, readQueueSize {}",
-                    subscription.getQualifiedName(),
-                    readQueue.size(),
-                    ex);
+            logger.error("Failed to read message for subscription " + subscription.getQualifiedName() + ", readQueueSize " + readQueue.size(), ex);
             return Optional.empty();
         }
     }
