@@ -23,6 +23,7 @@ import pl.allegro.tech.hermes.consumers.consumer.offset.OffsetCommitterConsumerR
 import pl.allegro.tech.hermes.consumers.consumer.offset.SubscriptionPartitionOffset;
 import pl.allegro.tech.hermes.consumers.consumer.offset.kafka.broker.KafkaConsumerOffsetMover;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.MessageReceiver;
+import pl.allegro.tech.hermes.consumers.consumer.resources.ResourcesGuard;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -42,6 +43,7 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
     private final KafkaConsumerRecordToMessageConverter messageConverter;
 
     private final BlockingQueue<Message> readQueue;
+    private final ResourcesGuard resourcesGuard;
     private final KafkaConsumerOffsetMover offsetMover;
 
     private final HermesMetrics metrics;
@@ -58,13 +60,15 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
                                               Subscription subscription,
                                               int pollTimeout,
                                               int readQueueCapacity,
-                                              ConsumerPartitionAssignmentState partitionAssignmentState) {
+                                              ConsumerPartitionAssignmentState partitionAssignmentState,
+                                              ResourcesGuard resourcesGuard) {
         this.metrics = metrics;
         this.subscription = subscription;
         this.pollTimeout = pollTimeout;
         this.partitionAssignmentState = partitionAssignmentState;
         this.consumer = consumer;
         this.readQueue = new ArrayBlockingQueue<>(readQueueCapacity);
+        this.resourcesGuard = resourcesGuard;
         this.offsetMover = new KafkaConsumerOffsetMover(subscription.getQualifiedName(), consumer);
         Map<String, KafkaTopic> topics = getKafkaTopics(topic, kafkaNamesMapper).stream()
                 .collect(Collectors.toMap(t -> t.name().asString(), Function.identity()));
@@ -85,9 +89,14 @@ public class KafkaSingleThreadedMessageReceiver implements MessageReceiver {
         try {
             if (readQueue.isEmpty()) {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(pollTimeout));
+                Set<TopicPartition> partitions = partitionAssignmentState.getPartitions(subscription.getQualifiedName());
+                Map<TopicPartition, Long> topicPartitionLongMap = consumer.endOffsets(partitions);
+                resourcesGuard.record(subscription, topicPartitionLongMap);
                 try {
                     for (ConsumerRecord<byte[], byte[]> record : records) {
-                        readQueue.add(convertToMessage(record));
+                        Message message = convertToMessage(record);
+                        readQueue.add(message);
+                        resourcesGuard.record(message);
                     }
                 } catch (Exception ex) {
                     logger.error("Failed to read message for subscription {}, readQueueSize {}, records {}",

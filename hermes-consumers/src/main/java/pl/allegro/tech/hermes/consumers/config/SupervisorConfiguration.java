@@ -20,6 +20,8 @@ import pl.allegro.tech.hermes.consumers.consumer.offset.OffsetQueue;
 import pl.allegro.tech.hermes.consumers.consumer.rate.ConsumerRateLimitSupervisor;
 import pl.allegro.tech.hermes.consumers.consumer.rate.calculator.OutputRateCalculatorFactory;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.ReceiverFactory;
+import pl.allegro.tech.hermes.consumers.consumer.resources.NoOpResourcesGuard;
+import pl.allegro.tech.hermes.consumers.consumer.resources.ResourcesGuard;
 import pl.allegro.tech.hermes.consumers.consumer.sender.MessageBatchSenderFactory;
 import pl.allegro.tech.hermes.consumers.health.ConsumerMonitor;
 import pl.allegro.tech.hermes.consumers.message.undelivered.UndeliveredMessageLogPersister;
@@ -117,7 +119,8 @@ public class SupervisorConfiguration {
                                            CompositeMessageContentWrapper compositeMessageContentWrapper,
                                            MessageBatchSenderFactory batchSenderFactory,
                                            ConsumerAuthorizationHandler consumerAuthorizationHandler,
-                                           Clock clock) {
+                                           Clock clock,
+                                           ResourcesGuard resourcesGuard) {
         return new ConsumerFactory(
                 messageReceiverFactory,
                 hermesMetrics,
@@ -133,8 +136,14 @@ public class SupervisorConfiguration {
                 compositeMessageContentWrapper,
                 batchSenderFactory,
                 consumerAuthorizationHandler,
-                clock
+                clock,
+                resourcesGuard
         );
+    }
+
+    @Bean
+    public ResourcesGuard resourcesGuard() {
+        return new NoOpResourcesGuard();
     }
 
     @Bean

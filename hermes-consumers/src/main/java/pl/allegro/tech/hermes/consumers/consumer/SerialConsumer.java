@@ -16,6 +16,7 @@ import pl.allegro.tech.hermes.consumers.consumer.rate.SerialConsumerRateLimiter;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.MessageReceiver;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.ReceiverFactory;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.UninitializedMessageReceiver;
+import pl.allegro.tech.hermes.consumers.consumer.resources.ResourcesGuard;
 import pl.allegro.tech.hermes.tracker.consumers.Trackers;
 
 import java.util.Optional;
@@ -36,6 +37,7 @@ public class SerialConsumer implements Consumer {
     private final SerialConsumerRateLimiter rateLimiter;
     private final Trackers trackers;
     private final MessageConverterResolver messageConverterResolver;
+    private final ResourcesGuard resourcesGuard;
     private final ConsumerMessageSender sender;
     private final ConfigFactory configFactory;
     private final OffsetQueue offsetQueue;
@@ -60,7 +62,8 @@ public class SerialConsumer implements Consumer {
                           Topic topic,
                           ConfigFactory configFactory,
                           OffsetQueue offsetQueue,
-                          ConsumerAuthorizationHandler consumerAuthorizationHandler) {
+                          ConsumerAuthorizationHandler consumerAuthorizationHandler,
+                          ResourcesGuard resourcesGuard) {
 
         this.defaultInflight = configFactory.getIntProperty(CONSUMER_INFLIGHT_SIZE);
         this.signalProcessingInterval = configFactory.getIntProperty(CONSUMER_SIGNAL_PROCESSING_INTERVAL);
@@ -74,9 +77,10 @@ public class SerialConsumer implements Consumer {
         this.consumerAuthorizationHandler = consumerAuthorizationHandler;
         this.trackers = trackers;
         this.messageConverterResolver = messageConverterResolver;
+        this.resourcesGuard = resourcesGuard;
         this.messageReceiver = new UninitializedMessageReceiver();
         this.topic = topic;
-        this.sender = consumerMessageSenderFactory.create(subscription, rateLimiter, offsetQueue, inflightSemaphore::release);
+        this.sender = consumerMessageSenderFactory.create(subscription, rateLimiter, offsetQueue, inflightSemaphore::release, resourcesGuard);
     }
 
     private int calculateInflightSize(Subscription subscription) {
@@ -93,10 +97,14 @@ public class SerialConsumer implements Consumer {
                 signalsInterrupt.run();
             } while (!inflightSemaphore.tryAcquire(signalProcessingInterval, TimeUnit.MILLISECONDS));
 
+            resourcesGuard.tryAcquireFetch(subscription);
+
             Optional<Message> maybeMessage = messageReceiver.next();
 
             if (maybeMessage.isPresent()) {
                 Message message = maybeMessage.get();
+
+                resourcesGuard.recordFetchedMessage(message);
 
                 if (logger.isDebugEnabled()) {
                     logger.debug(
@@ -109,6 +117,7 @@ public class SerialConsumer implements Consumer {
                 sendMessage(convertedMessage);
             } else {
                 inflightSemaphore.release();
+                resourcesGuard.markFetchWithoutMessages(subscription);
             }
         } catch (Exception e) {
             logger.error("Consumer loop failed for {}", subscription.getQualifiedName(), e);
@@ -130,6 +139,7 @@ public class SerialConsumer implements Consumer {
         initializeMessageReceiver();
         sender.initialize();
         rateLimiter.initialize();
+        resourcesGuard.registerSubscription(subscription);
         consumerAuthorizationHandler.createSubscriptionHandler(subscription.getQualifiedName());
     }
 
@@ -145,12 +155,14 @@ public class SerialConsumer implements Consumer {
         messageReceiver.stop();
         sender.shutdown();
         rateLimiter.shutdown();
+        resourcesGuard.unregisterSubscription(subscription);
         consumerAuthorizationHandler.removeSubscriptionHandler(subscription.getQualifiedName());
     }
 
     @Override
     public void updateSubscription(Subscription newSubscription) {
         logger.info("Updating consumer for subscription {}", subscription.getQualifiedName());
+        resourcesGuard.updateSubscription(newSubscription);
         inflightSemaphore.setMaxPermits(calculateInflightSize(newSubscription));
         rateLimiter.updateSubscription(newSubscription);
         sender.updateSubscription(newSubscription);

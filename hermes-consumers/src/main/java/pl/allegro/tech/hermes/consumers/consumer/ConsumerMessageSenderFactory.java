@@ -9,6 +9,7 @@ import pl.allegro.tech.hermes.common.metric.executor.InstrumentedExecutorService
 import pl.allegro.tech.hermes.consumers.consumer.offset.OffsetQueue;
 import pl.allegro.tech.hermes.consumers.consumer.rate.InflightsPool;
 import pl.allegro.tech.hermes.consumers.consumer.rate.SerialConsumerRateLimiter;
+import pl.allegro.tech.hermes.consumers.consumer.resources.ResourcesGuard;
 import pl.allegro.tech.hermes.consumers.consumer.result.DefaultErrorHandler;
 import pl.allegro.tech.hermes.consumers.consumer.result.DefaultSuccessHandler;
 import pl.allegro.tech.hermes.consumers.consumer.result.ErrorHandler;
@@ -59,7 +60,7 @@ public class ConsumerMessageSenderFactory {
     }
 
     public ConsumerMessageSender create(Subscription subscription, SerialConsumerRateLimiter consumerRateLimiter,
-                                        OffsetQueue offsetQueue, InflightsPool inflight) {
+                                        OffsetQueue offsetQueue, InflightsPool inflight, ResourcesGuard resourcesGuard) {
 
         List<SuccessHandler> successHandlers = Arrays.asList(
                 consumerAuthorizationHandler,
@@ -77,6 +78,7 @@ public class ConsumerMessageSenderFactory {
                 consumerRateLimiter,
                 rateLimiterReportingExecutor,
                 inflight,
+                resourcesGuard,
                 hermesMetrics,
                 configFactory.getIntProperty(CONSUMER_SENDER_ASYNC_TIMEOUT_MS),
                 futureAsyncTimeout,

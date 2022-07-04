@@ -21,12 +21,12 @@ public class OffsetCommitterConsumerRebalanceListener implements ConsumerRebalan
 
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-        state.revoke(name, integerPartitions(partitions));
+        state.revoke(name, partitions);
     }
 
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-        state.assign(name, integerPartitions(partitions));
+        state.assign(name, partitions);
     }
 
     private Set<Integer> integerPartitions(Collection<TopicPartition> partitions) {

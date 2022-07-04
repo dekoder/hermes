@@ -17,6 +17,7 @@ import pl.allegro.tech.hermes.consumers.consumer.rate.ConsumerRateLimitSuperviso
 import pl.allegro.tech.hermes.consumers.consumer.rate.SerialConsumerRateLimiter;
 import pl.allegro.tech.hermes.consumers.consumer.rate.calculator.OutputRateCalculatorFactory;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.ReceiverFactory;
+import pl.allegro.tech.hermes.consumers.consumer.resources.ResourcesGuard;
 import pl.allegro.tech.hermes.consumers.consumer.sender.MessageBatchSenderFactory;
 import pl.allegro.tech.hermes.domain.topic.TopicRepository;
 import pl.allegro.tech.hermes.tracker.consumers.Trackers;
@@ -40,6 +41,7 @@ public class ConsumerFactory {
     private final MessageBatchSenderFactory batchSenderFactory;
     private final ConsumerAuthorizationHandler consumerAuthorizationHandler;
     private final Clock clock;
+    private final ResourcesGuard resourcesGuard;
 
     public ConsumerFactory(ReceiverFactory messageReceiverFactory,
                            HermesMetrics hermesMetrics,
@@ -55,7 +57,8 @@ public class ConsumerFactory {
                            CompositeMessageContentWrapper compositeMessageContentWrapper,
                            MessageBatchSenderFactory batchSenderFactory,
                            ConsumerAuthorizationHandler consumerAuthorizationHandler,
-                           Clock clock) {
+                           Clock clock,
+                           ResourcesGuard resourcesGuard) {
 
         this.messageReceiverFactory = messageReceiverFactory;
         this.hermesMetrics = hermesMetrics;
@@ -72,6 +75,7 @@ public class ConsumerFactory {
         this.batchSenderFactory = batchSenderFactory;
         this.consumerAuthorizationHandler = consumerAuthorizationHandler;
         this.clock = clock;
+        this.resourcesGuard = resourcesGuard;
     }
 
     public Consumer createConsumer(Subscription subscription) {
@@ -103,7 +107,9 @@ public class ConsumerFactory {
                     topic,
                     configFactory,
                     offsetQueue,
-                    consumerAuthorizationHandler);
+                    consumerAuthorizationHandler,
+                    resourcesGuard
+            );
         }
     }
 }

@@ -12,6 +12,7 @@ import pl.allegro.tech.hermes.common.metric.Meters;
 import pl.allegro.tech.hermes.common.metric.timer.ConsumerLatencyTimer;
 import pl.allegro.tech.hermes.consumers.consumer.rate.AdjustableSemaphore;
 import pl.allegro.tech.hermes.consumers.consumer.rate.SerialConsumerRateLimiter;
+import pl.allegro.tech.hermes.consumers.consumer.resources.NoOpResourcesGuard;
 import pl.allegro.tech.hermes.consumers.consumer.result.ErrorHandler;
 import pl.allegro.tech.hermes.consumers.consumer.result.SuccessHandler;
 import pl.allegro.tech.hermes.consumers.consumer.sender.MessageSender;
@@ -27,8 +28,8 @@ import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 
-import static io.netty.handler.codec.http.HttpResponseStatus.TOO_MANY_REQUESTS;
 import static io.netty.handler.codec.http.HttpResponseStatus.SERVICE_UNAVAILABLE;
+import static io.netty.handler.codec.http.HttpResponseStatus.TOO_MANY_REQUESTS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -493,6 +494,7 @@ public class ConsumerMessageSenderTest {
                 rateLimiter,
                 Executors.newSingleThreadExecutor(),
                 () -> inflightSemaphore.release(),
+                new NoOpResourcesGuard(),
                 hermesMetrics,
                 ASYNC_TIMEOUT_MS,
                 new FutureAsyncTimeout<>(MessageSendingResult::failedResult, Executors.newSingleThreadScheduledExecutor()),

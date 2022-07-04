@@ -14,6 +14,7 @@ import pl.allegro.tech.hermes.consumers.consumer.receiver.kafka.KafkaHeaderExtra
 import pl.allegro.tech.hermes.consumers.consumer.receiver.kafka.KafkaConsumerRecordToMessageConverterFactory;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.kafka.KafkaMessageReceiverFactory;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.kafka.MessageContentReaderFactory;
+import pl.allegro.tech.hermes.consumers.consumer.resources.ResourcesGuard;
 import pl.allegro.tech.hermes.domain.filtering.chain.FilterChainFactory;
 import pl.allegro.tech.hermes.tracker.consumers.Trackers;
 
@@ -30,7 +31,8 @@ public class ConsumerReceiverConfiguration {
                                                        KafkaNamesMapper kafkaNamesMapper,
                                                        FilterChainFactory filterChainFactory,
                                                        Trackers trackers,
-                                                       ConsumerPartitionAssignmentState consumerPartitionAssignmentState) {
+                                                       ConsumerPartitionAssignmentState consumerPartitionAssignmentState,
+                                                       ResourcesGuard resourcesGuard) {
         return new KafkaMessageReceiverFactory(
                 configs,
                 messageConverterFactory,
@@ -39,7 +41,8 @@ public class ConsumerReceiverConfiguration {
                 kafkaNamesMapper,
                 filterChainFactory,
                 trackers,
-                consumerPartitionAssignmentState
+                consumerPartitionAssignmentState,
+                resourcesGuard
         );
     }
 

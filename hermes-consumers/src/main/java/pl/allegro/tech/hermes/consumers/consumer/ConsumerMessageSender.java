@@ -9,6 +9,7 @@ import pl.allegro.tech.hermes.common.metric.HermesMetrics;
 import pl.allegro.tech.hermes.common.metric.timer.ConsumerLatencyTimer;
 import pl.allegro.tech.hermes.consumers.consumer.rate.InflightsPool;
 import pl.allegro.tech.hermes.consumers.consumer.rate.SerialConsumerRateLimiter;
+import pl.allegro.tech.hermes.consumers.consumer.resources.ResourcesGuard;
 import pl.allegro.tech.hermes.consumers.consumer.result.ErrorHandler;
 import pl.allegro.tech.hermes.consumers.consumer.result.SuccessHandler;
 import pl.allegro.tech.hermes.consumers.consumer.sender.MessageSender;
@@ -42,6 +43,7 @@ public class ConsumerMessageSender {
     private final MessageSenderFactory messageSenderFactory;
     private final Clock clock;
     private final InflightsPool inflight;
+    private final ResourcesGuard resourcesGuard;
     private final FutureAsyncTimeout<MessageSendingResult> async;
     private final int asyncTimeoutMs;
     private final HermesMetrics hermesMetrics;
@@ -61,6 +63,7 @@ public class ConsumerMessageSender {
                                  SerialConsumerRateLimiter rateLimiter,
                                  ExecutorService deliveryReportingExecutor,
                                  InflightsPool inflight,
+                                 ResourcesGuard resourcesGuard,
                                  HermesMetrics hermesMetrics,
                                  int asyncTimeoutMs,
                                  FutureAsyncTimeout<MessageSendingResult> futureAsyncTimeout,
@@ -74,6 +77,7 @@ public class ConsumerMessageSender {
         this.messageSender = messageSenderFactory.create(subscription);
         this.subscription = subscription;
         this.inflight = inflight;
+        this.resourcesGuard = resourcesGuard;
         this.async = futureAsyncTimeout;
         this.requestTimeoutMs = subscription.getSerialSubscriptionPolicy().getRequestTimeout();
         this.asyncTimeoutMs = asyncTimeoutMs;
@@ -224,12 +228,14 @@ public class ConsumerMessageSender {
 
     private void handleMessageDiscarding(Message message, MessageSendingResult result) {
         inflight.release();
+        resourcesGuard.release(subscription);
         errorHandlers.forEach(h -> h.handleDiscarded(message, subscription, result));
     }
 
     private void handleMessageSendingSuccess(Message message, MessageSendingResult result) {
         rateLimiter.registerSuccessfulSending();
         inflight.release();
+        resourcesGuard.release(subscription);
         successHandlers.forEach(h -> h.handleSuccess(message, subscription, result));
     }
 
